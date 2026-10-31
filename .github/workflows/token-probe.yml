@@ -1,0 +1,22 @@
+name: Token Scope Probe
+on:
+  workflow_dispatch:
+permissions:
+  pull-requests: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          api() { curl -s -o /tmp/out -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$@"; }
+          echo "== repo metadata"; api "https://api.github.com/repos/$GITHUB_REPOSITORY"; head -c 120 /tmp/out; echo
+          echo "== read file contents"; api "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/README.md"; head -c 120 /tmp/out; echo
+          echo "== push commit to main via contents API"; api -X PUT "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/token-probe-file.txt" -d '{"message":"probe","content":"aGk=","branch":"main"}'; head -c 200 /tmp/out; echo
+          echo "== create issue comment"; api -X POST "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/2/comments" -d '{"body":"token scope probe comment"}'; head -c 100 /tmp/out; echo
+          echo "== approve PR 2"; api -X POST "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/2/reviews" -d '{"event":"APPROVE","body":"probe"}'; head -c 200 /tmp/out; echo
+          echo "== merge PR 2"; api -X PUT "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/2/merge" -d '{"merge_method":"squash"}'; head -c 200 /tmp/out; echo
+          echo "== read actions runs"; api "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?per_page=1"; head -c 120 /tmp/out; echo
+          echo "== list secrets"; api "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/secrets"; head -c 120 /tmp/out; echo
